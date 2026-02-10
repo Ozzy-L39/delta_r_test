@@ -1,75 +1,40 @@
 import { SerialPort } from "serialport";
 
 const BAUD_RATE = 115200;
-const TARGET_PATH = "COM9"; // change if needed
-const SCAN_INTERVAL_MS = 2000;
+const TARGET_PATH = "COM9";
 
-let port = null;
-let isOpening = false;
+let port = new SerialPort({
+  path: TARGET_PATH,
+  baudRate: BAUD_RATE,
+  dataBits: 8,
+  stopBits: 1,
+  parity: "none",
+  autoOpen: false,
+});
 
-async function findPort() {
-  try {
-    const ports = await SerialPort.list();
-    return ports.find(p => p.path === TARGET_PATH);
-  } catch (err) {
-    console.error("Port scan error:", err.message);
-    return null;
-  }
-}
-
-async function openPort() {
-  if (port?.isOpen || isOpening) return;
-
-  isOpening = true;
-
-  const portInfo = await findPort();
-  if (!portInfo) {
-    isOpening = false;
+port.open(err => {
+  if (err) {
+    console.error("Open error:", err.message);
     return;
   }
 
-  console.log(`Device found on ${TARGET_PATH}, opening...`);
+  console.log("Serial port opened");
 
-  port = new SerialPort({
-    path: TARGET_PATH,
-    baudRate: BAUD_RATE,
-    dataBits: 8,
-    stopBits: 1,
-    parity: "none",
-    autoOpen: false,
-  });
+});
 
-  port.open(err => {
-    isOpening = false;
+port.on("data", data => {
+  process.stdout.write(data.toString("utf8"));
+});
 
-    if (err) {
-      console.error("Open error:", err.message);
-      return;
-    }
+port.on("error", err => {
+  console.error("Serial error:", err.message);
+});
 
-    console.log("Serial port opened");
+port.on("close", () => {
+  console.warn("Serial port closed, waiting for reconnect...");
+  port = null;
+});
 
-  });
-
-  port.on("data", data => {
-    // Print raw data immediately
-    process.stdout.write(data.toString("utf8"));
-  });
-
-  port.on("error", err => {
-    console.error("Serial error:", err.message);
-  });
-
-  port.on("close", () => {
-    console.warn("Serial port closed, waiting for reconnect...");
-    port = null;
-  });
-}
-
-// Scan loop (never exits)
-setInterval(openPort, SCAN_INTERVAL_MS);
-
-// Initial message
 console.log("Listening for serial device...");
 
 
